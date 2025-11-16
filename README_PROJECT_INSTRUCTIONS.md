@@ -9,8 +9,8 @@ This guide provides comprehensive instructions for configuring and starting all 
 - [Service Overview](#service-overview)
 - [Installation Instructions](#installation-instructions)
   - [1. Kafka (kafka-docker)](#1-kafka-kafka-docker)
-  - [2. Kafka MCP HTTP Server (kakfa-mcp-http)](#2-kafka-mcp-http-server-kakfa-mcp-http)
-  - [3. Node BFF (node-bff)](#3-node-bff-node-bff)
+  - [2. Node BFF (node-bff)](#2-node-bff-node-bff)
+  - [3. Kafka MCP HTTP Server (kakfa-mcp-http)](#3-kafka-mcp-http-server-kakfa-mcp-http)
   - [4. OPA (opa)](#4-opa-opa)
   - [5. Go Claude Agent (go-claude-agent)](#5-go-claude-agent-go-claude-agent)
   - [6. Python Claude Agent (python-claude-agent)](#6-python-claude-agent-python-claude-agent)
@@ -47,7 +47,10 @@ brew install python@3.14
 # Install uv (Python package manager)
 brew install uv
 
-# Optional: Install GitHub CLI for repo management
+# Install Git (version control)
+brew install git
+
+# Install GitHub CLI (required for repo management)
 brew install gh
 ```
 
@@ -83,19 +86,39 @@ Reload your shell:
 source ~/.zshrc  # or source ~/.bash_profile
 ```
 
+### Clone Repositories
+
+Clone all project repositories using the GitHub CLI:
+
+```bash
+# Authenticate with GitHub (if not already authenticated)
+gh auth login
+
+# Clone all repositories
+gh repo clone scottcochran/architecture
+gh repo clone scottcochran/kafka-docker
+gh repo clone scottcochran/go-claude-agent
+gh repo clone scottcochran/kakfa-mcp-http
+gh repo clone scottcochran/my-manim-dir
+gh repo clone scottcochran/node-bff
+gh repo clone scottcochran/opa
+gh repo clone scottcochran/python-claude-agent
+gh repo clone scottcochran/typescript-claude-agent
+```
+
+**Note**: All repositories should be cloned into the same parent directory for consistent paths.
+
 ---
 
 ## Network Setup
 
-All Docker services communicate via a shared network called `agent-network`. This network must be created before starting any services.
+All Docker services communicate via a shared network called `agent-network`. This network is created automatically by docker-compose when you start the first service.
 
-### Create the Agent Network
+**Note**: You do NOT need to manually create the `agent-network`. The docker-compose files will create it automatically if it doesn't exist.
 
-```bash
-docker network create agent-network
-```
+### Verify Network Exists
 
-### Verify Network Creation
+After starting your first service, you can verify the network was created:
 
 ```bash
 docker network ls | grep agent-network
@@ -109,12 +132,12 @@ docker network inspect agent-network
 | Service | Port(s) | Description | Dependencies |
 |---------|---------|-------------|--------------|
 | **Kafka** | 9092, 9093 | Apache Kafka message broker (KRaft mode) | None |
-| **Kafka MCP HTTP** | 8123 | MCP HTTP server for Kafka operations | Kafka |
 | **Node BFF** | 3000, 3443 | Backend-for-Frontend with Kafka APIs | Kafka |
+| **Kafka MCP HTTP** | 8123 | MCP HTTP server for Kafka operations | Kafka |
 | **OPA** | 8181 | Open Policy Agent for policy enforcement | None |
-| **Go Claude Agent** | N/A | CLI chat application using Go | Anthropic API |
-| **Python Claude Agent** | N/A | CLI chat application using Python | Anthropic API |
-| **TypeScript Claude Agent** | N/A | Production TypeScript agent with MCP support | Anthropic API |
+| **Go Claude Agent** | N/A | Docker container running Go-based Claude agent | Anthropic API, Kafka |
+| **Python Claude Agent** | N/A | Docker container running Python-based Claude agent | Anthropic API, Kafka |
+| **TypeScript Claude Agent** | N/A | Docker container running TypeScript agent with MCP | Anthropic API, Kafka |
 
 ---
 
@@ -128,7 +151,6 @@ Apache Kafka message broker running in KRaft mode (no Zookeeper required).
 
 **Prerequisites**:
 - Docker Desktop running
-- `agent-network` created
 
 **Setup**:
 ```bash
@@ -169,7 +191,67 @@ docker-compose down -v
 
 ---
 
-### 2. Kafka MCP HTTP Server (kakfa-mcp-http)
+### 2. Node BFF (node-bff)
+
+Backend-for-Frontend service with REST APIs for Kafka operations.
+
+**Location**: `node-bff/`
+
+**Prerequisites**:
+- Docker Desktop running
+- Kafka running
+- `agent-network` created
+
+**Setup**:
+```bash
+cd node-bff
+
+# For local development
+npm install
+
+# Create .env file
+cp .env.example .env
+```
+
+**Configure** `.env`:
+```bash
+PORT=3000
+KAFKA_BROKERS=localhost:9092  # For local dev
+# KAFKA_BROKERS=kafka:19092   # For Docker deployment
+NODE_ENV=development
+ENABLE_HTTPS=false
+```
+
+**Start with Docker Compose** (recommended):
+```bash
+docker-compose up -d
+```
+
+**Start for Local Development**:
+```bash
+npm run dev
+```
+
+**Verify**:
+```bash
+# Health check
+curl http://localhost:3000/health
+
+# Test Kafka connection
+curl http://localhost:3000/api/kafka/connect
+
+# List topics
+curl http://localhost:3000/api/kafka/admin/topics
+```
+
+**Stop**:
+```bash
+docker-compose down
+```
+
+---
+
+### 3. Kafka MCP HTTP Server (kakfa-mcp-http)
 
 MCP HTTP server providing Kafka operations as tools for AI assistants.
 
@@ -178,7 +260,6 @@ MCP HTTP server providing Kafka operations as tools for AI assistants.
 **Prerequisites**:
 - Docker Desktop running
 - Kafka running
-- `agent-network` created
 
 **Setup**:
 ```bash
@@ -246,66 +327,6 @@ docker-compose down
 
 ---
 
-### 3. Node BFF (node-bff)
-
-Backend-for-Frontend service with REST APIs for Kafka operations.
-
-**Location**: `node-bff/`
-
-**Prerequisites**:
-- Docker Desktop running
-- Kafka running
-- `agent-network` created
-
-**Setup**:
-```bash
-cd node-bff
-
-# For local development
-npm install
-
-# Create .env file
-cp .env.example .env
-```
-
-**Configure** `.env`:
-```bash
-PORT=3000
-KAFKA_BROKERS=localhost:9092  # For local dev
-# KAFKA_BROKERS=kafka:19092   # For Docker deployment
-NODE_ENV=development
-ENABLE_HTTPS=false
-```
-
-**Start with Docker Compose** (recommended):
-```bash
-docker-compose up -d
-```
-
-**Start for Local Development**:
-```bash
-npm run dev
-```
-
-**Verify**:
-```bash
-# Health check
-curl http://localhost:3000/health
-
-# Test Kafka connection
-curl http://localhost:3000/api/kafka/connect
-
-# List topics
-curl http://localhost:3000/api/kafka/admin/topics
-```
-
-**Stop**:
-```bash
-docker-compose down
-```
-
----
-
 ### 4. OPA (opa)
 
 Open Policy Agent for policy-based decision making.
@@ -314,7 +335,6 @@ Open Policy Agent for policy-based decision making.
 
 **Prerequisites**:
 - Docker Desktop running
-- `agent-network` created
 
 **Setup**:
 ```bash
@@ -376,98 +396,18 @@ docker-compose down
 
 ### 5. Go Claude Agent (go-claude-agent)
 
-CLI chat application built with Go and claude-agent-sdk.
+Docker container running Go-based Claude agent with Kafka integration.
 
 **Location**: `go-claude-agent/`
 
 **Prerequisites**:
-- Go 1.22+
+- Docker Desktop running
+- Kafka running
 - `ANTHROPIC_API_KEY` environment variable set
 
 **Setup**:
 ```bash
 cd go-claude-agent
-
-# Download dependencies
-go mod download
-```
-
-**Run**:
-```bash
-# Direct run
-go run chat.go
-
-# Or build and run
-go build -o chat-cli chat.go
-./chat-cli
-```
-
-**Usage**:
-- Type your messages and press Enter
-- Type `quit` or `exit` to end the conversation
-
----
-
-### 6. Python Claude Agent (python-claude-agent)
-
-CLI chat application built with Python and claude-agent-sdk.
-
-**Location**: `python-claude-agent/`
-
-**Prerequisites**:
-- Python 3.8+ (3.14 recommended)
-- `uv` package manager
-- `ANTHROPIC_API_KEY` environment variable set
-
-**Setup**:
-```bash
-cd python-claude-agent
-
-# Initialize with uv (recommended)
-uv init
-uv venv
-uv pip install -r requirements.txt
-```
-
-**Alternative Setup (pip)**:
-```bash
-pip install -r requirements.txt
-```
-
-**Run**:
-```bash
-# With uv
-uv run chat.py
-
-# Or with python
-python chat.py
-
-# Alternative: main.py
-python main.py
-```
-
-**Usage**:
-- Type your messages and press Enter
-- Type `quit` or `exit` to end the conversation
-
----
-
-### 7. TypeScript Claude Agent (typescript-claude-agent)
-
-Production-ready TypeScript agent with MCP server and client support.
-
-**Location**: `typescript-claude-agent/`
-
-**Prerequisites**:
-- Node.js 18+
-- `ANTHROPIC_API_KEY` environment variable set
-
-**Setup**:
-```bash
-cd typescript-claude-agent
-
-# Install dependencies
-npm install
 
 # Create .env file
 cp .env.example .env
@@ -476,52 +416,179 @@ cp .env.example .env
 **Configure** `.env`:
 ```bash
 ANTHROPIC_API_KEY=your_api_key_here
+KAFKA_BROKERS=kafka:19092
 ```
 
-**Build**:
+**Start with Docker Compose**:
 ```bash
-npm run build
+docker-compose up -d
 ```
 
-**Run Modes**:
+**Attach to Running Container** (for interactive use):
+```bash
+docker attach go-claude-agent
+```
 
-1. **Interactive CLI (Standard)**:
-   ```bash
-   # Development
-   npm run dev
+**Detach from Container** (without stopping it):
+Press `Ctrl+P` then `Ctrl+Q`
 
-   # Production
-   npm start
-   ```
+**View Logs**:
+```bash
+docker-compose logs -f go-claude-agent
+```
 
-2. **Interactive CLI with MCP Tools**:
-   ```bash
-   # Development
-   npm run dev:mcp
+**Stop**:
+```bash
+docker-compose down
+```
 
-   # Production
-   npm start:mcp
-   ```
+**Alternative - Local Development**:
+```bash
+# Download dependencies
+go mod download
 
-3. **MCP Server Mode** (for Claude Desktop):
-   ```bash
-   # Development
-   npm run mcp
+# Run directly
+go run chat.go
+```
 
-   # Production
-   npm run mcp:prod
-   ```
+---
 
-4. **Run Examples**:
-   ```bash
-   # Standard examples
-   npm run examples
+### 6. Python Claude Agent (python-claude-agent)
 
-   # Examples with MCP tools
-   npm run examples:mcp
-   ```
+Docker container running Python-based Claude agent with Kafka integration.
 
-**CLI Commands**:
+**Location**: `python-claude-agent/`
+
+**Prerequisites**:
+- Docker Desktop running
+- Kafka running
+- `ANTHROPIC_API_KEY` environment variable set
+
+**Setup**:
+```bash
+cd python-claude-agent
+
+# Create .env file
+cp .env.example .env
+```
+
+**Configure** `.env`:
+```bash
+ANTHROPIC_API_KEY=your_api_key_here
+KAFKA_BROKERS=kafka:19092
+```
+
+**Start with Docker Compose**:
+```bash
+docker-compose up -d
+```
+
+**Attach to Running Container** (for interactive use):
+```bash
+docker attach python-claude-agent
+```
+
+**Detach from Container** (without stopping it):
+Press `Ctrl+P` then `Ctrl+Q`
+
+**View Logs**:
+```bash
+docker-compose logs -f python-claude-agent
+```
+
+**Stop**:
+```bash
+docker-compose down
+```
+
+**Alternative - Local Development**:
+```bash
+# Initialize with uv
+uv init
+uv venv
+uv pip install -r requirements.txt
+
+# Run with uv
+uv run chat.py
+
+# Or with python
+python chat.py
+```
+
+---
+
+### 7. TypeScript Claude Agent (typescript-claude-agent)
+
+Docker container running production TypeScript agent with MCP and Kafka support.
+
+**Location**: `typescript-claude-agent/`
+
+**Prerequisites**:
+- Docker Desktop running
+- Kafka running
+- `ANTHROPIC_API_KEY` environment variable set
+
+**Setup**:
+```bash
+cd typescript-claude-agent
+
+# Create .env file
+cp .env.example .env
+```
+
+**Configure** `.env`:
+```bash
+ANTHROPIC_API_KEY=your_api_key_here
+KAFKA_BROKERS=kafka:19092
+```
+
+**Start with Docker Compose**:
+```bash
+docker-compose up -d
+```
+
+**Attach to Running Container** (for interactive use):
+```bash
+docker attach typescript-claude-agent
+```
+
+**Detach from Container** (without stopping it):
+Press `Ctrl+P` then `Ctrl+Q`
+
+**View Logs**:
+```bash
+docker-compose logs -f typescript-claude-agent
+```
+
+**Stop**:
+```bash
+docker-compose down
+```
+
+**Alternative - Local Development**:
+
+```bash
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Run modes:
+# 1. Interactive CLI (Standard)
+npm run dev
+
+# 2. Interactive CLI with MCP Tools
+npm run dev:mcp
+
+# 3. MCP Server Mode (for Claude Desktop)
+npm run mcp
+
+# 4. Run Examples
+npm run examples
+```
+
+**CLI Commands** (when attached):
 - `/reset` - Clear conversation history
 - `/tools` - List available tools (MCP mode)
 - `/exit` or `/quit` - Exit the CLI
@@ -535,26 +602,31 @@ npm run build
 Start services in this order to satisfy dependencies:
 
 ```bash
-# 1. Create network (one-time setup)
-docker network create agent-network
-
-# 2. Start Kafka (foundation service)
+# 1. Start Kafka (foundation service - creates agent-network automatically)
 cd kafka-docker && docker-compose up -d && cd ..
 
-# 3. Wait for Kafka to be ready (30 seconds)
+# 2. Wait for Kafka to be ready (30 seconds)
 sleep 30
 
-# 4. Start OPA (independent service)
+# 3. Start OPA (independent service)
 cd opa && docker-compose up -d && cd ..
 
-# 5. Start Node BFF (depends on Kafka)
+# 4. Start Node BFF (depends on Kafka)
 cd node-bff && docker-compose up -d && cd ..
 
-# 6. Start Kafka MCP HTTP (depends on Kafka)
+# 5. Start Kafka MCP HTTP (depends on Kafka)
 cd kakfa-mcp-http && docker-compose up -d && cd ..
 
-# 7. Claude agents can be started as needed (interactive)
+# 6. Start Claude agents (optional, for interactive use)
+cd go-claude-agent && docker-compose up -d && cd ..
+cd python-claude-agent && docker-compose up -d && cd ..
+cd typescript-claude-agent && docker-compose up -d && cd ..
+
+# 7. Attach to an agent for interactive chat
+docker attach typescript-claude-agent
 ```
+
+**Note**: The `agent-network` is created automatically by the first docker-compose that starts. You do NOT need to create it manually.
 
 ### Automated Startup Script
 
@@ -568,10 +640,7 @@ echo "Starting all services..."
 # Navigate to project root
 cd "$(dirname "$0")/.."
 
-# Create network if it doesn't exist
-docker network inspect agent-network >/dev/null 2>&1 || docker network create agent-network
-
-# Start Kafka
+# Start Kafka (creates agent-network automatically)
 echo "Starting Kafka..."
 cd kafka-docker && docker-compose up -d && cd ..
 
@@ -591,12 +660,20 @@ cd node-bff && docker-compose up -d && cd ..
 echo "Starting Kafka MCP HTTP..."
 cd kakfa-mcp-http && docker-compose up -d && cd ..
 
-echo "Core services started!"
+# Start Claude agents (optional)
+echo "Starting Claude agents..."
+cd go-claude-agent && docker-compose up -d && cd ..
+cd python-claude-agent && docker-compose up -d && cd ..
+cd typescript-claude-agent && docker-compose up -d && cd ..
+
+echo "All services started!"
 echo ""
-echo "To start Claude agents:"
-echo "  cd go-claude-agent && go run chat.go"
-echo "  cd python-claude-agent && uv run chat.py"
-echo "  cd typescript-claude-agent && npm run dev"
+echo "To attach to an agent for interactive chat:"
+echo "  docker attach typescript-claude-agent"
+echo "  docker attach python-claude-agent"
+echo "  docker attach go-claude-agent"
+echo ""
+echo "To detach without stopping: Ctrl+P then Ctrl+Q"
 ```
 
 Make it executable:
@@ -768,6 +845,11 @@ cd node-bff && docker-compose logs -f node-bff
 
 # Kafka MCP HTTP
 cd kakfa-mcp-http && docker-compose logs -f kafka-mcp-http
+
+# Claude Agents
+cd go-claude-agent && docker-compose logs -f go-claude-agent
+cd python-claude-agent && docker-compose logs -f python-claude-agent
+cd typescript-claude-agent && docker-compose logs -f typescript-claude-agent
 ```
 
 ### Clean Restart
@@ -775,18 +857,21 @@ cd kakfa-mcp-http && docker-compose logs -f kafka-mcp-http
 To completely reset all services:
 
 ```bash
-# Stop all services
+# Stop all services (including agents)
+cd typescript-claude-agent && docker-compose down && cd ..
+cd python-claude-agent && docker-compose down && cd ..
+cd go-claude-agent && docker-compose down && cd ..
 cd kakfa-mcp-http && docker-compose down && cd ..
 cd node-bff && docker-compose down && cd ..
 cd opa && docker-compose down && cd ..
 cd kafka-docker && docker-compose down -v && cd ..
 
-# Remove network
+# Remove network (optional - will be recreated automatically)
 docker network rm agent-network
 
-# Start fresh
-docker network create agent-network
-# ... start services in order
+# Start fresh (network will be created automatically)
+cd kafka-docker && docker-compose up -d && cd ..
+# ... continue with other services in order
 ```
 
 ---
@@ -796,25 +881,24 @@ docker network create agent-network
 ### Dependency Graph
 
 ```
-agent-network (Docker Network)
+agent-network (Docker Network - Created Automatically)
     |
-    ├── kafka (Independent)
+    ├── kafka (Independent - creates network)
     |     ├── node-bff (Depends on Kafka)
-    |     └── kakfa-mcp-http (Depends on Kafka)
+    |     ├── kakfa-mcp-http (Depends on Kafka)
+    |     ├── go-claude-agent (Depends on Kafka)
+    |     ├── python-claude-agent (Depends on Kafka)
+    |     └── typescript-claude-agent (Depends on Kafka)
     |
     └── opa (Independent)
-
-Claude Agents (Independent, require ANTHROPIC_API_KEY)
-    ├── go-claude-agent
-    ├── python-claude-agent
-    └── typescript-claude-agent
 ```
 
 ### Start Order Summary
 
-1. **First**: `agent-network`, `kafka`, `opa` (can start in parallel)
-2. **Second**: `node-bff`, `kakfa-mcp-http` (after Kafka is ready)
-3. **Anytime**: Claude agents (independent CLI tools)
+1. **First**: `kafka` (creates agent-network automatically)
+2. **Second**: `opa` (can start in parallel with Kafka)
+3. **Third**: `node-bff`, `kakfa-mcp-http` (after Kafka is ready)
+4. **Fourth**: Claude agents (requires Kafka, ANTHROPIC_API_KEY)
 
 ---
 
@@ -870,4 +954,4 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 ---
 
-Last Updated: 2025-11-08
+Last Updated: 2025-11-16
