@@ -1,4 +1,4 @@
-# An Multi Agent Collaboration Architecture
+# A Multi Agent Collaboration Architecture
 
 # Components
 1. Open Policy Agent
